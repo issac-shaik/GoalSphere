@@ -1,0 +1,5 @@
+add forgot pw functionality
+dark mode
+Ability to type name while signing up, or leave it as blank instead of "User"
+Change Pfp by image upload
+Make custom calendar view for weekly and monthly goals
