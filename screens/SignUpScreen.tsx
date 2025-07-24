@@ -22,11 +22,12 @@ export default function SignUpScreen({ navigation }: Props) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
+  const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
   const handleSignUp = async () => {
-    if (!email || !password || !username) {
+    if (!email || !password || !username || !name) {
       Alert.alert('Error', 'Please fill in all fields');
       return;
     }
@@ -36,21 +37,65 @@ export default function SignUpScreen({ navigation }: Props) {
       return;
     }
 
+    if (name.length < 2) {
+      Alert.alert('Error', 'Name must be at least 2 characters long');
+      return;
+    }
+
     setLoading(true);
     try {
+      // First, sign up the user
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
           data: {
             username,
+            name,
           },
         },
       });
 
       if (error) {
         Alert.alert('Error', error.message);
-      } else if (data.user) {
+        return;
+      }
+
+      if (data.user) {
+        // Wait a moment for the trigger to potentially create the profile
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Check if profile was created by trigger, if not create it manually
+        const { data: existingProfile } = await supabase
+          .from('users')
+          .select('id')
+          .eq('id', data.user.id)
+          .single();
+
+        if (!existingProfile) {
+          // Create user profile manually if trigger didn't work
+          const { error: profileError } = await supabase
+            .from('users')
+            .insert({
+              id: data.user.id,
+              username,
+              name,
+            });
+
+          if (profileError) {
+            console.error('Profile creation error:', profileError);
+          }
+
+          // Also create streak record
+          await supabase
+            .from('streaks')
+            .insert({
+              user_id: data.user.id,
+              current_streak: 0,
+              longest_streak: 0,
+            });
+        }
+
         Alert.alert(
           'Success',
           'Account created successfully!',
@@ -58,6 +103,7 @@ export default function SignUpScreen({ navigation }: Props) {
         );
       }
     } catch (error) {
+      console.error('Signup error:', error);
       Alert.alert('Error', 'An unexpected error occurred');
     } finally {
       setLoading(false);
@@ -81,6 +127,15 @@ export default function SignUpScreen({ navigation }: Props) {
             <Text style={styles.subtitle}>Start tracking your productivity journey</Text>
 
             <View style={styles.form}>
+              <TextInput
+                style={styles.input}
+                placeholder="Full Name"
+                placeholderTextColor="#9CA3AF"
+                value={name}
+                onChangeText={setName}
+                autoCapitalize="words"
+                returnKeyType="next"
+              />
               <TextInput
                 style={styles.input}
                 placeholder="Username"

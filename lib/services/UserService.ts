@@ -29,6 +29,61 @@ export interface UserWithStats extends User {
 }
 
 export class UserService extends BaseService {
+  async createUserProfile(userData: CreateUserRequest): Promise<ServiceResponse<User>> {
+    try {
+      const userId = await this.getCurrentUserId();
+      if (!userId) {
+        return this.createErrorResponse('User not authenticated');
+      }
+
+      // Check if user profile already exists
+      const { data: existingUser } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', userId)
+        .single();
+
+      if (existingUser) {
+        return this.createErrorResponse('User profile already exists');
+      }
+
+      // Validate user data
+      const validation = validateUser(userData);
+      if (!validation.isValid) {
+        return this.createErrorResponse(validation.errors.join(', '));
+      }
+
+      const { data, error } = await supabase
+        .from('users')
+        .insert({
+          id: userId,
+          username: userData.username,
+          name: userData.name || 'User',
+          bio: userData.bio,
+          avatar_url: userData.avatar_url,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        return this.createErrorResponse(error);
+      }
+
+      // Also create streak record if it doesn't exist
+      await supabase
+        .from('streaks')
+        .insert({
+          user_id: userId,
+          current_streak: 0,
+          longest_streak: 0,
+        });
+
+      return this.createSuccessResponse(data);
+    } catch (error) {
+      return this.createErrorResponse(error);
+    }
+  }
+
   async getCurrentUser(): Promise<ServiceResponse<UserWithStats>> {
     try {
       const userId = await this.getCurrentUserId();
